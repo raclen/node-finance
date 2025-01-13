@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const axios = require("axios");
 
 
@@ -27,11 +28,6 @@ async function getKlines() {
   
   return response.data.data; // 返回K线数据
 }
-
-// 执行买入操作
-const crypto = require("crypto");
-const axios = require("axios");
-
 
 
 // 获取时间戳（UTC 时间）
