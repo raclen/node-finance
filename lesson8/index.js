@@ -1,82 +1,128 @@
-const axios = require('axios');
+const axios = require("axios");
 
-const OKX_API_URL = 'https://www.okx.com';
-const SYMBOL = 'ETH-USDT'; // 交易对
-const CHECK_INTERVAL = 60000; // 检查间隔，毫秒（例如：60秒）
 
-// 获取ETH的分时价格和成交量
-async function getEthMarketData() {
-    try {
-        const response = await axios.get(`${OKX_API_URL}/api/v5/market/candles`, {
-            params: {
-                instId: SYMBOL,
-                bar: '15m', // 15分钟的K线数据
-                limit: 2 // 获取最近两个15分钟的K线数据
-            }
-        });
+// 配置 OKX API
+const API_BASE = "https://www.okx.com/api/v5";
+// 配置 OKX API
+const API_KEY = "你的API Key";
+const SECRET_KEY = "你的Secret Key";
+const PASSPHRASE = "你的Passphrase";
+const SYMBOL = "ETH-USDT"; // ETH/USDT 交易对
+const INTERVAL = "15m"; // 时间间隔
+const MONITOR_INTERVAL = 10000; // 每次监控的间隔时间（毫秒）
 
-        return response.data.data;
-    } catch (error) {
-        console.error('获取市场数据时发生错误：', error);
-        return null;
-    }
+// 策略2：自定义短线买入策略
+function shortTermBuyStrategy(currentPrice, previousPrice) {
+  // 示例策略：当前价格比前一个K线的收盘价高出1%以内
+  const priceDifference = currentPrice - previousPrice;
+  const percentageDifference = (priceDifference / previousPrice) * 100;
+  return percentageDifference > 0 && percentageDifference <= 1;
+}
+// https://www.okx.com/priapi/v5/market/candles?instId=TRX-USDT
+// 获取K线数据
+async function getKlines() {
+  const url = `${API_BASE}/market/candles?instId=${SYMBOL}&bar=${INTERVAL}`;
+  const response = await axios.get(url);
+  console.log(response.data);
+  
+  return response.data.data; // 返回K线数据
 }
 
-// 进行自动买入
-async function placeBuyOrder(price, amount) {
-    try {
-        const response = await axios.post(`${OKX_API_URL}/api/v5/trade/order`, {
-            instId: SYMBOL,
-            tdMode: 'cash', // 交易模式
-            side: 'buy',
-            ordType: 'limit',
-            px: price.toString(),
-            sz: amount.toString()
-        }, {
-            headers: {
-                'OK-ACCESS-KEY': 'your_api_key',
-                'OK-ACCESS-SIGN': 'your_signature',
-                'OK-ACCESS-TIMESTAMP': new Date().toISOString(),
-                'OK-ACCESS-PASSPHRASE': 'your_passphrase'
-            }
-        });
+// 执行买入操作
+const crypto = require("crypto");
+const axios = require("axios");
 
-        console.log('买入订单已提交：', response.data);
-    } catch (error) {
-        console.error('提交买入订单时发生错误：', error);
-    }
+
+
+// 获取时间戳（UTC 时间）
+function getTimestamp() {
+  return new Date().toISOString();
 }
 
-// 持续监控并执行买入操作
-async function monitorAndTrade() {
-    const amount = 0.1; // 购买的ETH数量（示例）
-
-    while (true) {
-        const marketData = await getEthMarketData();
-        if (marketData && marketData.length >= 2) {
-            const [previousCandle, currentCandle] = marketData;
-
-            const prevVolume = parseFloat(previousCandle[5]);
-            const currVolume = parseFloat(currentCandle[5]);
-            const prevClose = parseFloat(previousCandle[4]);
-            const currClose = parseFloat(currentCandle[4]);
-
-            console.log(`上一个15分钟成交量：${prevVolume}，当前15分钟成交量：${currVolume}`);
-            console.log(`上一个15分钟收盘价：${prevClose}，当前15分钟收盘价：${currClose}`);
-
-            if (currVolume > prevVolume && currClose > prevClose) {
-                console.log('成交量和价格均高于上一个15分钟周期，执行买入操作');
-                await placeBuyOrder(currClose, amount);
-                break; // 成功买入后退出循环
-            } else {
-                console.log('未达到买入条件，继续监控');
-            }
-        }
-
-        // 等待一段时间后再检查
-        await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL));
-    }
+// 生成签名
+function generateSignature(timestamp, method, requestPath, body = "") {
+  const message = timestamp + method + requestPath + body;
+  return crypto.createHmac("sha256", SECRET_KEY).update(message).digest("base64");
 }
 
-// 开始监控
-monitorAndTrade();
+// 执行买入操作
+async function executeBuyOperation() {
+  const requestPath = "/trade/order";
+  const url = `${API_BASE}${requestPath}`;
+  const timestamp = getTimestamp();
+
+  // 请求体：买入 ETH/USDT 市价单
+  const body = JSON.stringify({
+    instId: "ETH-USDT", // 交易对
+    tdMode: "cash",     // 保证金模式，"cash" 表示非杠杆账户
+    side: "buy",        // 买入
+    ordType: "market",  // 市价单
+    sz: "0.01",         // 买入数量（ETH）
+  });
+
+  // 生成签名
+  const signature = generateSignature(timestamp, "POST", requestPath, body);
+
+  try {
+    // 发起 POST 请求
+    const response = await axios.post(url, body, {
+      headers: {
+        "Content-Type": "application/json",
+        "OK-ACCESS-KEY": API_KEY,
+        "OK-ACCESS-SIGN": signature,
+        "OK-ACCESS-TIMESTAMP": timestamp,
+        "OK-ACCESS-PASSPHRASE": PASSPHRASE,
+      },
+    });
+
+    console.log("买入成功:", response.data);
+  } catch (error) {
+    console.error("买入失败:", error.response ? error.response.data : error.message);
+  }
+}
+
+
+
+
+// 主监控逻辑
+async function monitor() {
+  console.log("开始监控ETH价格和成交量...");
+
+  try {
+    const klineData = await getKlines();
+
+    if (klineData.length < 2) {
+      console.error("K线数据不足");
+      return;
+    }
+
+    const currentKline = klineData[0]; // 当前15分钟K线
+    const previousKline = klineData[1]; // 上一15分钟K线
+
+    const currentVolume = parseFloat(currentKline[5]); // 当前成交量
+    const previousVolume = parseFloat(previousKline[5]); // 上一成交量
+
+    const currentPrice = parseFloat(currentKline[4]); // 当前收盘价
+    const previousPrice = parseFloat(previousKline[4]); // 上一收盘价
+
+    // 判断策略1
+    const strategy1Satisfied = currentVolume > previousVolume && currentPrice > previousPrice;
+
+    // 判断策略2
+    const strategy2Satisfied = shortTermBuyStrategy(currentPrice, previousPrice);
+
+    if (strategy1Satisfied && strategy2Satisfied) {
+      await executeBuyOperation();
+    } else {
+      console.log("策略未满足，继续监控...");
+    }
+  } catch (error) {
+    console.error("监控过程中出错:", error.message);
+  }
+
+  // 设置定时器继续监控
+  setTimeout(monitor, MONITOR_INTERVAL);
+}
+
+// 启动监控
+monitor();
