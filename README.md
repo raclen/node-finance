@@ -30,7 +30,8 @@
 - lesson5-使用sina数据源获取实时数据
 - lesson6-使用sina数据源获取历史数据
 - lesson7-使用雪球数据源获取历史数据
-- lesson8-使用okx数据源获取ETH的数据（可能调用不同，我这里使用clash verge开启tun模式）
+- lesson8-使用okx数据源获取ETH的数据（需要代理，我这里使用clash verge开启tun模式）
+- lesson9-使用趋势追踪策略和均值回归策略策略监控ETH
 
 ## 如何运行
 - node版本大于20
