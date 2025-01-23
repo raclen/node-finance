@@ -9,7 +9,7 @@ const API_KEY = "你的API Key";
 const SECRET_KEY = "你的Secret Key";
 const PASSPHRASE = "你的Passphrase";
 const SYMBOL = "ETH-USDT"; // ETH/USDT 交易对
-const INTERVAL = "1H"; // 时间间隔
+const INTERVAL = "15m"; // 时间间隔
 const MONITOR_INTERVAL = 30000; // 每次监控的间隔时间（毫秒）
 const RSI_PERIOD = 14; // RSI 计算周期
 const MOMENTUM_PERIOD = 10; // 动量策略周期
@@ -86,8 +86,8 @@ function calculateRSI(klineData) {
   return 100 - (100 / (1 + rs));
 }
 // 获取K线数据
-async function getKlines() {
-  const url = `${API_BASE}/market/candles?instId=${SYMBOL}&bar=${INTERVAL}`;
+async function getKlines(stockcode) {
+  const url = `${API_BASE}/market/candles?instId=${stockcode}&bar=${INTERVAL}`;
   const response = await axiosInstance.get(url);
   return response.data.data; // 返回K线数据
 }
@@ -137,11 +137,11 @@ async function executeBuyOperation() {
 }
 
 // 主监控逻辑
-async function monitor() {
-  logColor('开始监控ETH价格和成交量...', 'underline');
+async function monitor(stockcode) {
+  logColor(`开始监控${stockcode}价格和成交量...`, 'underline');
 
   try {
-    const klineData = await getKlines();
+    const klineData = await getKlines(stockcode);
 
     if (klineData.length < 20) {
       logColor('K线数据不足', 'red');
@@ -177,7 +177,6 @@ async function monitor() {
     }
     if (momentumSatisfied) {
       logColor('策略4：动量策略满足', 'green');
-      await executeBuyOperation();
     } else {
       logColor('策略4：动量策略不满足', 'red');
     }
@@ -191,8 +190,10 @@ async function monitor() {
     logColor("监控过程中出错:" +error.message, 'red');
   }
 
-  setTimeout(monitor, MONITOR_INTERVAL);
+  setTimeout(()=>{
+    monitor(stockcode)
+  }, MONITOR_INTERVAL);
 }
 
 // 启动监控
-monitor();
+monitor('OKB-USDT');
