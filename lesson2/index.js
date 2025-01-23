@@ -3,8 +3,7 @@
  * https://github.com/gadicc/node-yahoo-finance2/blob/devel/docs/modules/historical.md
  */
 
-const yahooFinance = require('yahoo-finance2').default;
-
+import yahooFinance from "yahoo-finance2";
 /**
  * 获取指定股票在特定月份的历史表现
  * @param {string} symbol - 股票代码（如：'^NDX'、'000906.SS'）

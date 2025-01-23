@@ -3,9 +3,9 @@
  * @see https://xueqiu.com/S/SH000001
  */
 
-const axios = require("axios");
-const moment = require("moment");
 
+import axios from "axios";
+import moment from "moment";
 /**
  * 获取雪球股票数据
  * @param {string} symbol - 股票代码

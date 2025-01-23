@@ -1,8 +1,7 @@
 /**
  * 获取新浪股票历史数据
  */
-
-const axios = require('axios');
+import axios from "axios";
 
 async function fetchSinaStockData(symbol, scale, datalen, ma = 'no') {
   const baseUrl = 'https://quotes.sina.cn/cn/api/jsonp_v2.php';

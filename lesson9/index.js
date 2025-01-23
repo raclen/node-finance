@@ -1,5 +1,7 @@
-const axios = require("axios");
-const crypto = require("crypto");
+
+import axios from "axios";
+import crypto from "crypto";
+import { logColor } from "../utils/index.js";
 
 // 配置 OKX API
 const API_BASE = "https://www.okx.com/api/v5";
@@ -9,7 +11,14 @@ const PASSPHRASE = "你的Passphrase";
 const SYMBOL = "ETH-USDT"; // ETH/USDT 交易对
 const INTERVAL = "1H"; // 时间间隔
 const MONITOR_INTERVAL = 10000; // 每次监控的间隔时间（毫秒）
+const RSI_PERIOD = 14; // RSI 计算周期
 
+// 调用示例
+// logColor('红色文本', 'red');
+// logColor('绿色文本', 'green');
+// logColor('蓝色文本', 'blue');
+// logColor('加粗文本', 'bold');
+// logColor('下划线文本', 'underline');
 
 
 // 策略3：趋势追踪策略
@@ -42,7 +51,27 @@ function calculateSMA(klineData, period) {
   }
   return sma;
 }
+// 计算 RSI 指标
+function calculateRSI(klineData) {
+  if (klineData.length < RSI_PERIOD + 1) return null;
 
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= RSI_PERIOD; i++) {
+    const change = parseFloat(klineData[i - 1][4]) - parseFloat(klineData[i][4]);
+    if (change > 0) {
+      gains += change;
+    } else {
+      losses -= change;
+    }
+  }
+
+  const avgGain = gains / RSI_PERIOD;
+  const avgLoss = losses / RSI_PERIOD;
+  if (avgLoss === 0) return 100;
+
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
 // 获取K线数据
 async function getKlines() {
   const url = `${API_BASE}/market/candles?instId=${SYMBOL}&bar=${INTERVAL}`;
@@ -96,29 +125,44 @@ async function executeBuyOperation() {
 
 // 主监控逻辑
 async function monitor() {
-  console.log("开始监控ETH价格和成交量...");
+  logColor('开始监控ETH价格和成交量...', 'underline');
 
   try {
     const klineData = await getKlines();
 
     if (klineData.length < 20) {
-      console.error("K线数据不足");
+      logColor('K线数据不足', 'red');
       return;
     }
-
+    const rsi = calculateRSI(klineData);
     const currentKline = klineData[0];
     const currentPrice = parseFloat(currentKline[4]);
 
     const strategy1Satisfied = trendFollowingStrategy(klineData);
     const strategy2Satisfied = meanReversionStrategy(currentPrice, klineData);
+    
 
-    if (strategy1Satisfied && strategy2Satisfied) {
+    const strategy3Satisfied = rsi !== null && rsi < 30;
+
+    console.log(`当前 RSI: ${rsi}`);
+
+    if(strategy1Satisfied){
+      logColor('策略1：趋势追踪策略满足', 'green');
+    }
+    if(strategy2Satisfied){
+      logColor('策略2：均值回归策略满足', 'green');
+    }
+    if(strategy3Satisfied){
+      logColor('策略3：RSI指标满足', 'green');
+    }
+
+    if (strategy1Satisfied && strategy2Satisfied && strategy3Satisfied) {
       await executeBuyOperation();
     } else {
-      console.log("策略未满足，继续监控...");
+      logColor('策略未同时满足，继续监控...', 'blue');
     }
   } catch (error) {
-    console.error("监控过程中出错:", error.message);
+    logColor("监控过程中出错:", error.message, 'red');
   }
 
   setTimeout(monitor, MONITOR_INTERVAL);

@@ -2,8 +2,8 @@
  * 国内数据查询示例
  */
 
-const axios = require('axios');
-const moment = require('moment');
+import axios from "axios";
+import moment from "moment";
 
 async function getStockIndexData(stockCode,Prefix) {
     try {

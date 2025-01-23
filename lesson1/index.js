@@ -1,4 +1,4 @@
-const yahooFinance = require("yahoo-finance2").default;
+import yahooFinance from "yahoo-finance2";
 
 yahooFinance
   .chart("000001.SS", {

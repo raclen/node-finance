@@ -1,5 +1,4 @@
-const axios = require('axios');
-
+import axios from "axios";
 async function getSinaStockData(symbol) {
   // symbol 为股票代码，上海市场加前缀“sh”，深证市场加前缀“sz”
   const url = `https://hq.sinajs.cn/list=${symbol}`;

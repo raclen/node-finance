@@ -1,7 +1,6 @@
-const yahooFinance = require('yahoo-finance2').default;
-const ExcelJS = require('exceljs');
-const moment = require('moment');
-
+import ExcelJS from "exceljs";
+import yahooFinance from "yahoo-finance2";
+import moment from "moment";
 
 let volumeUnitMap = {
     1:'',

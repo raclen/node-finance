@@ -1,5 +1,5 @@
-const crypto = require("crypto");
-const axios = require("axios");
+import axios from "axios";
+import crypto from "crypto";
 
 
 // 配置 OKX API
