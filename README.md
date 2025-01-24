@@ -22,6 +22,9 @@
 
 ![image](https://github.com/user-attachments/assets/58483da1-4d8b-4653-8386-c0854f6f06b1)
 
+![image](https://github.com/user-attachments/assets/782412d9-ebc6-471f-a3e7-ff9d619c4b95)
+
+
 ## 工作内容-我具体做了什么？
 - lesson1-简单例子获取指数按天的数据 
 - lesson2-获取某股票或者指数，近十年某月的上涨情况 
