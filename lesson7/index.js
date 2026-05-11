@@ -35,7 +35,7 @@ async function fetchXueqiuStockData(symbol, begin, period, count) {
         // referer: "https://xueqiu.com/S/SH000001",
         // "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
         // priority: "u=1, i",
-        Cookie: 'xqat=511bf5034992327eaaacb9d6ff05888641f2c88a9;u=5717328043098179;',
+        Cookie: 'xqat=05ecf720bcc0cb0d0ce319045c7960b18fa571fd;u=9057207726',
       }
     });
 
@@ -51,9 +51,11 @@ async function fetchXueqiuStockData(symbol, begin, period, count) {
  */
 async function main() {
   try {
-    const date = "2025-01-04";
+    const date = "2026-05-10"; // 示例日期
     const timestamp = moment(date, "YYYY-MM-DD").valueOf(); // 转换为时间戳
-    const result = await fetchXueqiuStockData("SH000001", timestamp, "day", -3);
+    const result = await fetchXueqiuStockData(".IXIC", timestamp, "day", -3);
+    
+
 
     const data = result.data;
     console.log("原始数据:", data);

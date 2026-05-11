@@ -17,8 +17,8 @@ async function getStockIndexData(stockCode,Prefix) {
                 fields2: 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
                 klt: '101',         // 日K线
                 fqt: '1',           // 前复权
-                beg: '20241226',    // 开始日期
-                end: '20241230',    // 结束日期
+                beg: '20260330',    // 开始日期
+                end: '20260511',    // 结束日期
                 lmt: '1000000',     // 最大条数
                 _: Date.now()
             },
@@ -27,7 +27,9 @@ async function getStockIndexData(stockCode,Prefix) {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
         });
-
+        console.log('------------------------------');    
+        console.log(response.data);
+        
         if (!response.data || !response.data.data || !response.data.data.klines) {
             throw new Error('数据格式错误');
         }
@@ -53,10 +55,15 @@ async function getStockIndexData(stockCode,Prefix) {
 }
 
 // 示例调用
-getStockIndexData('000001', 1); // 查询上证指数
+// getStockIndexData('NDX100', 100); // 查询深证指数
+// getStockIndexData('SPX', 100); // 查询标普500指数
 
 
 
+// Prefix: 1. 股票代码前缀：
+//    - 深证股票代码前缀为 "0."
+//    - 沪股股票代码前缀为 "1."
+//    - 美国是 "100"（如纳斯达克指数为 "100.NDX100"）
 // fields1: f1,f3 (代码,名称)
 // fields2: f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61 (日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率)
 // klt: k线类型 (101日线 102周线 103月线 104季线 105半年线 106年线)
@@ -64,3 +71,5 @@ getStockIndexData('000001', 1); // 查询上证指数
 // secid: 股票/行业代码 如股票 0.002594 (0深股 1沪股) 如行业 90.BK0733 (90是固定值)
 // end: 20241230 结束日期
 // lmt: 1000000 最大条数
+
+

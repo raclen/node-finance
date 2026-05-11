@@ -9,11 +9,13 @@ const API_KEY = "你的API Key";
 const SECRET_KEY = "你的Secret Key";
 const PASSPHRASE = "你的Passphrase";
 
-const SYMBOL = "OKB-USDT"; // 交易对
-// const INTERVAL = "15m"; // 时间间隔
+const SYMBOL = "BTC-USDT"; // 交易对
+const INTERVAL = "5m"; // 时间间隔
 const MONITOR_INTERVAL = 30000; // 每次监控的间隔时间（毫秒）
 const RSI_PERIOD = 14; // RSI 计算周期
 const axiosInstance = axios.create({ timeout: 10000 }); // 设置超时时间为 10 秒
+const after = moment('2025-01-24', "YYYY-MM-DD").valueOf(); // 结束日期
+const before = moment('2024-01-23', "YYYY-MM-DD").valueOf(); //  开始日期
 
 //----------------------------------------------------------------
 // 1. 工具函数部分
@@ -148,6 +150,31 @@ function bollingerSellStrategy(klineData) {
   const currentPrice = parseFloat(klineData[0][4]);
   return currentPrice > upperBand;
 }
+// 记录最高盈利比例
+let highestProfitRatio = 0;
+
+// 新增：回测盈利策略
+function profitRetraceStrategy(entryPrice, currentPrice, minProfitRatio = 0.02, retraceRatio = 0.2) {
+  // 当前盈利比例
+  const profitRatio = ((currentPrice - entryPrice) / entryPrice) *100;
+  minProfitRatio = minProfitRatio * 100;
+  
+  // 如果当前盈利大于等于指定的最小盈利（2%），开始追踪
+  if (profitRatio >= minProfitRatio && entryPrice > 0) {
+    // 更新历史最高盈利比例
+    if (profitRatio > highestProfitRatio) {
+      highestProfitRatio = profitRatio;
+    }
+    
+    // 检查是否回落达到回测比例（如最高盈利的 20%）
+    // 示例：最高盈利 10%，回落到 8%，跌幅就是 2%（占最高盈利 20%）
+    if (parseFloat(highestProfitRatio - profitRatio ).toFixed(3)>= parseFloat(highestProfitRatio * retraceRatio).toFixed(3)) {
+      // console.log([currentPrice,entryPrice,highestProfitRatio, profitRatio]);
+      return true; // 表示满足卖出，可以在主逻辑中打印提示或进行后续交易流程
+    }
+  }
+  return false;
+}
 
 // 均值回归策略 (从原代码保留)
 function meanReversionStrategy(currentPrice, klineData) {
@@ -162,9 +189,18 @@ function meanReversionStrategy(currentPrice, klineData) {
 //----------------------------------------------------------------
 
 // 获取K线数据
-async function getKlines(stockcode,bar = '15m', limit = 100) {
-  const url = `${API_BASE}/market/candles?instId=${stockcode}&bar=${bar}&limit=${limit}`;
-  const response = await axiosInstance.get(url);
+async function getKlines(stockcode,bar = '15m' ) {
+  const url = `${API_BASE}/market/candles?instId=${stockcode}&bar=${bar}`;
+  // after 和 before 参数用于限制返回的数据范围
+  const response = await axiosInstance.get(url,
+    {
+      params: {
+        // after,
+        // before,
+        limit: 1000, // 限制返回的数据条数
+      }
+    }
+  );
    // 根据日期倒序的数据，这里将时间戳转换成可读格式
    let klineData = response.data.data;
    klineData.forEach((item) => {
@@ -366,7 +402,7 @@ function backtest(klineDataHistory) {
     // 取出过去到 i 的切片
     const sliceData = klineDataHistory.slice(i - 20, i + 1).reverse();
     const currentPrice = parseFloat(sliceData[0][4]);
-    const strategyTrend = true || trendFollowingStrategy(sliceData);
+    const strategyTrend =  trendFollowingStrategy(sliceData);
     const strategyMean = true|| meanReversionStrategy(currentPrice, sliceData);
     const currentRSI = calculateRSI(sliceData);
     const strategyRSI = currentRSI !== null && currentRSI < 30;
@@ -383,13 +419,19 @@ function backtest(klineDataHistory) {
       // console.log(sliceData[0][0]+':',percChange.toFixed(2)+'%');
     }
     
-    const percsell = percChange >= 2; // Sell if profit >= 5%
+    const percsell = percChange >= 0.5; // Sell if profit >= 5%
 
+    
+    // 新增：如果满足我们的“盈利达到 2% 且盈利回测 20%”时，也提示建议卖出
+    const percsell2 = profitRetraceStrategy(entryPrice, currentPrice, 0.006, 0.1); 
+    // if (profitRetraceStrategy(entryPrice, currentPrice, 0.02, 0.2)) {
+    //   logColor('回测盈利策略触发，建议卖出', 'magenta');
+    // }
     // 买入策略示例：全部满足
     // const buySignal = strategyTrend || strategyMean || strategyRSI || strategyMomentum;
-    const buySignal = strategyTrend || strategyMomentum;
+    const buySignal =  strategyMomentum
     // 卖出策略示例：全部满足
-    // const sellSignal = strategyDeadCross || strategyRsiSell || strategyBollSell || percsell;
+    // const sellSignal = strategyDeadCross || strategyRsiSell || strategyBollSell || percsell || percsell2;
     const sellSignal = percsell;
 
 
@@ -420,12 +462,13 @@ function backtest(klineDataHistory) {
 
 // 如果要手动调用回测，需事先获取一段历史数据：
 // (示例) 
-const klineDataHistory = await getKlines("DOGE-USDT",'1D',1000); // 请自行获取更长周期数据
+const klineDataHistory = await getKlines(SYMBOL,INTERVAL); // 请自行获取更长周期数据
 const result = backtest(klineDataHistory.reverse()); // 注意需要从老到新排序
 
 // 根据gain大于0的交易记录，计算胜率
 const winTrades = result.trades.filter(t => t.gain > 0 && t.type === "SELL");
-const winRate = winTrades.length /result.trades.filter(t => t.type === "SELL").length;
+const sellNum = result.trades.filter(t => t.type === "SELL").length;
+const winRate = winTrades.length /sellNum;
 
 // console.log("回测结果:", result);
 // 交易记录
@@ -434,5 +477,5 @@ console.table(result.trades);
 console.log("回测结果:", result.finalProfit);
 
 // 交易次数
-console.log('交易次数:',result.trades.length/2);
+console.log('交易次数:',sellNum);
 logColor("胜率:"+winRate* 100+'%', "green");

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多指数回撤统计对比图</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+    <script>
+        // chartjs-plugin-zoom 在 UMD 模式下暴露为 ChartZoom
+        const chartjsPluginZoom = window.ChartZoom;
+    </script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .controls { margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .controls label { display: flex; align-items: center; gap: 5px; }
+        .controls input { padding: 5px; }
+        .controls button { padding: 6px 15px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .controls button:hover { background: #0056b3; }
+        .controls .hint { font-size: 12px; color: #666; margin-left: auto; }
+        .stats { margin: 20px 0; padding: 15px; background: #fff3cd; border-radius: 5px; }
+        .chart-container { position: relative; height: 400px; margin-bottom: 30px; }
+        #statsDetail { margin: 20px 0; }
+        .stat-card { margin: 12px 0; }
+        .stat-card table tr td:first-child { width: 180px; }
+        @media (max-width: 600px) {
+            .stat-card table tr td:first-child { width: 120px; }
+        }
+    </style>
+</head>
+<body>
+    <h1>回撤统计图</h1>
+
+    <div class="controls">
+        <label>指数1: <input type="text" id="symbol1" value=".IXIC" style="width:100px;" placeholder="例: .IXIC"></label>
+        <label>指数2: <input type="text" id="symbol2" value=".INX" style="width:100px;" placeholder="例: SPY"></label>
+        <label>开始: <input type="date" id="startDate"></label>
+        <label>结束: <input type="date" id="endDate"></label>
+        <button onclick="loadData()">查询</button>
+        <button onclick="resetZoom()" style="background:#6c757d;">重置缩放</button>
+        <span class="hint">鼠标拖拽可缩放时间范围</span>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="chart-container">
+        <canvas id="priceChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="drawdownChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="peChart"></canvas>
+    </div>
+
+    <h2>走势统计总结</h2>
+    <div id="statsDetail"></div>
+
+    <script>
+        Chart.register(chartjsPluginZoom);
+
+        const COLORS = [
+            { border: '#007bff', bg: 'rgba(0,123,255,0.05)', fill: 'rgba(0,123,255,0.10)' },
+            { border: '#dc3545', bg: 'rgba(220,53,69,0.05)', fill: 'rgba(220,53,69,0.10)' },
+            { border: '#28a745', bg: 'rgba(40,167,69,0.05)', fill: 'rgba(40,167,69,0.10)' },
+            { border: '#ffc107', bg: 'rgba(255,193,7,0.05)', fill: 'rgba(255,193,7,0.10)' },
+        ];
+
+        let priceChart, drawdownChart, peChart;
+
+        function initDates() {
+            const end = new Date();
+            const start = new Date();
+            start.setFullYear(start.getFullYear() - 1);
+            document.getElementById('endDate').valueAsDate = end;
+            document.getElementById('startDate').valueAsDate = start;
+        }
+
+        function resetZoom() {
+            if (priceChart) priceChart.resetZoom();
+            if (drawdownChart) drawdownChart.resetZoom();
+            if (peChart) peChart.resetZoom();
+        }
+
+        async function loadData() {
+            const start = document.getElementById('startDate').value.replace(/-/g, '');
+            const end = document.getElementById('endDate').value.replace(/-/g, '');
+            const code1 = document.getElementById('symbol1').value.trim() || '.IXIC';
+            const code2 = document.getElementById('symbol2').value.trim();
+
+            const codes = code2 ? [code1, code2] : [code1];
+
+            try {
+                const res = await fetch(`/api/drawdown/compare?start=${start}&end=${end}&codes=${codes.map(encodeURIComponent).join(',')}`);
+                const results = await res.json();
+
+                if (res.status !== 200) {
+                    document.getElementById('stats').innerHTML = `<strong style="color:red;">错误:</strong> ${results.error}`;
+                    return;
+                }
+
+                renderCharts(results);
+            } catch (error) {
+                alert('数据加载失败: ' + error.message);
+            }
+        }
+
+        function getZoomOptions() {
+            return {
+                pan: {
+                    enabled: true,
+                    mode: 'x',
+                },
+                zoom: {
+                    wheel: { enabled: true },
+                    pinch: { enabled: true },
+                    drag: {
+                        enabled: true,
+                        backgroundColor: 'rgba(0,123,255,0.08)',
+                        borderColor: '#007bff',
+                        borderWidth: 1,
+                    },
+                    mode: 'x',
+                },
+            };
+        }
+
+        function renderCharts(results) {
+            if (priceChart) priceChart.destroy();
+            if (drawdownChart) drawdownChart.destroy();
+            if (peChart) peChart.destroy();
+
+            // 合并所有日期标签（取并集，按时间排序）
+            const allDates = new Set();
+            results.forEach(r => {
+                if (r.data) r.data.forEach(d => allDates.add(d.date));
+            });
+            const labels = Array.from(allDates).sort();
+
+            // 按日期对齐每个指数的数据
+            function alignData(data, field) {
+                const map = new Map(data.map(d => [d.date, d[field]]));
+                return labels.map(date => map.get(date) ?? null);
+            }
+
+            // ---- 统计信息 ----
+            const statsHtml = results.map((r, i) => {
+                if (r.error) return `<span style="color:red;">${r.code}: ${r.error}</span>`;
+                return `<span style="color:${COLORS[i].border};"><strong>${r.code} 最大回撤:</strong> ${r.maxDrawdown.toFixed(2)}%</span>`;
+            }).join(' | ');
+            document.getElementById('stats').innerHTML = statsHtml;
+
+            // ---- 价格图 ----
+            const priceDatasets = results.filter(r => r.data).map((r, i) => ({
+                label: `${r.code} 价格`,
+                data: alignData(r.data, 'close'),
+                borderColor: COLORS[i].border,
+                backgroundColor: COLORS[i].bg,
+                fill: false,
+                pointRadius: 0,
+                borderWidth: 1.5,
+                yAxisID: 'y',
+            }));
+
+            priceChart = new Chart(document.getElementById('priceChart'), {
+                type: 'line',
+                data: { labels, datasets: priceDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: { zoom: getZoomOptions(), legend: { position: 'top' } },
+                    scales: {
+                        x: { ticks: { maxTicksLimit: 12 } },
+                        y: { type: 'linear', position: 'left' },
+                    },
+                },
+            });
+
+            // ---- 回撤图 ----
+            const drawdownDatasets = results.filter(r => r.data).map((r, i) => ({
+                label: `${r.code} 回撤 (%)`,
+                data: alignData(r.data, 'drawdown'),
+                borderColor: COLORS[i].border,
+                backgroundColor: COLORS[i].fill,
+                fill: true,
+                pointRadius: 0,
+                borderWidth: 1.5,
+                yAxisID: 'y',
+            }));
+
+            drawdownChart = new Chart(document.getElementById('drawdownChart'), {
+                type: 'line',
+                data: { labels, datasets: drawdownDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: { zoom: getZoomOptions(), legend: { position: 'top' } },
+                    scales: {
+                        x: { ticks: { maxTicksLimit: 12 } },
+                        y: { type: 'linear', position: 'left' },
+                    },
+                },
+            });
+            renderPeChart(results, labels, alignData);
+            renderStats(results);
+        }
+
+        function renderPeChart(results, labels, alignData) {
+            const peDatasets = results.filter(r => r.data).map((r, i) => ({
+                label: `${r.code} PE`,
+                data: alignData(r.data, 'pe'),
+                borderColor: COLORS[i].border,
+                backgroundColor: COLORS[i].fill,
+                fill: true,
+                pointRadius: 0,
+                borderWidth: 1.5,
+                yAxisID: 'y',
+            }));
+            peChart = new Chart(document.getElementById('peChart'), {
+                type: 'line',
+                data: { labels, datasets: peDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: { zoom: getZoomOptions(), legend: { position: 'top' } },
+                    scales: {
+                        x: { ticks: { maxTicksLimit: 12 } },
+                        y: { type: 'linear', position: 'left' },
+                    },
+                },
+            });
+        }
+
+        function renderStats(results) {
+            const statsHtml = results.map((r, i) => {
+                if (r.error || !r.stats) return '';
+                const s = r.stats;
+                return `
+                <div class="stat-card" style="border-left: 4px solid ${COLORS[i].border}; padding: 12px; margin: 8px 0; background: #fafafa; border-radius: 4px;">
+                    <h3 style="margin: 0 0 8px 0; color: ${COLORS[i].border};">${r.code} 走势分析</h3>
+                    <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+                        <tr><td style="padding: 3px 8px; color: #666;">📊 数据周期</td><td style="padding: 3px 8px;">${s.totalDays} 个交易日</td></tr>
+                        <tr><td style="padding: 3px 8px; color: #666;">📉 下跌波段次数</td><td style="padding: 3px 8px;">${s.totalDeclineCount} 次</td></tr>
+                        <tr><td style="padding: 3px 8px; color: #666;">⏱ 平均每</td><td style="padding: 3px 8px;"><strong>${s.avgDaysBetweenDeclines}</strong> 个交易日发生一次下跌（约 <strong>${(s.avgDaysBetweenDeclines / 22).toFixed(1)}</strong> 个月）</td></tr>
+                        <tr><td style="padding: 3px 8px; color: #666;">📏 平均每次下跌持续</td><td style="padding: 3px 8px;"><strong>${s.avgDeclineDays}</strong> 个交易日</td></tr>
+                        <tr><td style="padding: 3px 8px; color: #666;">🔴 最长单次下跌持续</td><td style="padding: 3px 8px;"><strong>${s.maxDeclineDays}</strong> 个交易日</td></tr>
+                        <tr><td style="padding: 3px 8px; color: #666;">🌊 年化波动率</td><td style="padding: 3px 8px;"><strong>${s.annualVolatility}%</strong></td></tr>
+                        <tr><td style="padding: 3px 8px; color: #666;">📈 当前PE</td><td style="padding: 3px 8px;"><strong>${s.lastPE ?? 'N/A'}</strong>（区间 ${s.minPE ?? 'N/A'} ~ ${s.maxPE ?? 'N/A'})</td></tr>
+                    </table>
+                </div>`;
+            }).join('');
+            document.getElementById('statsDetail').innerHTML = statsHtml;
+        }
+
+        initDates();
+        loadData();
+    </script>
+</body>
+</html>
