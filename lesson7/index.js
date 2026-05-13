@@ -17,7 +17,7 @@ import moment from "moment";
 async function fetchXueqiuStockData(symbol, begin, period, count) {
   const url = `https://stock.xueqiu.com/v5/stock/chart/kline.json?symbol=${symbol}&begin=${begin}&period=${period}&type=before&count=${count}&indicator=kline%2Cpe%2Cpb%2Cps%2Cpcf%2Cmarket_capital%2Cagt%2Cggt%2Cbalance`;
   
-  // 当前时间2024年1月4号。cookie经过本人尝试xqat和u是必须的，否则拿不到数据。
+  // 当前时间2024年5月13号。cookie经过本人尝试xqat和u是必须的，否则拿不到数据。
   // 建议请求头加上全部，才能更像真人请求，后期雪球反爬虫会加强，可会变化。
   // 代码中的请求头的cookie，我写的假的，建议自己抓包获取。
   try {
