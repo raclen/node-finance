@@ -58,7 +58,7 @@ async function getStockIndexData(stockCode,Prefix) {
 // getStockIndexData('NDX100', 100); // 查询深证指数
 // getStockIndexData('SPX', 100); // 查询标普500指数
 
-
+getStockIndexData('159509', 0); // 查询景顺长城纳指科技etf
 
 // Prefix: 1. 股票代码前缀：
 //    - 深证股票代码前缀为 "0."
